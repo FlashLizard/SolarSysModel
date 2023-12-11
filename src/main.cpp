@@ -15,13 +15,13 @@ struct Material
     glm::vec3 ka; // Ambient coefficient.
     glm::vec3 kd; // Diffuse coefficient.
     glm::vec3 kr; // Reflected specular coefficient.
-    float n;       // The specular reflection exponent. Ranges from 0.0 to 128.0.
+    float n;      // The specular reflection exponent. Ranges from 0.0 to 128.0.
 };
 
 Material ballMa = {glm::vec3(0.1, 0.1, 0.1),
-                 glm::vec3(0.3, 0.3, 0.3),
-                 glm::vec3(1, 1, 1),
-                 10};
+                   glm::vec3(0.3, 0.3, 0.3),
+                   glm::vec3(1, 1, 1),
+                   10};
 
 struct DotLight
 {
@@ -30,9 +30,8 @@ struct DotLight
 };
 
 DotLight sunLight = {
-    glm::vec3(0,0,0),
-    glm::vec3(1,1,1)
-};
+    glm::vec3(0, 0, 0),
+    glm::vec3(1, 1, 1)};
 
 class Image
 {
@@ -74,6 +73,7 @@ float aspact = (float)4.0 / (float)3.0;
 static GLfloat xRot = 20.0f;
 static GLfloat xRot3 = 20.0f;
 static GLfloat yRot = 20.0f;
+static GLfloat selfRot = 0.0f;
 
 static GLfloat vXRot = 0.0f;
 static GLfloat vYRot = 0.0f;
@@ -95,8 +95,6 @@ const int X_SEGMENTS = 50;
 const int Y_SEGMENTS = 50;
 const GLfloat PI = 3.14159265358979323846f;
 
-glm::vec3 viewPos(0.0f, 0.0f, -5.0f);
-
 // 贴图
 Image *earthImg;
 Image *moonImg;
@@ -107,6 +105,17 @@ unsigned int earthTex;
 unsigned int sunTex;
 unsigned int moonTex;
 unsigned int backTex;
+
+bool firstMouse = true;
+float lastX, lastY;
+float deltaTime = 0;
+float speed = 0.3;
+
+float yaw = 90, pitch = 0;
+glm::vec3 viewPos(0.0f, 0.0f, -5.0f);
+glm::vec3 cameraFront(0, 0, 1.0);
+glm::vec3 cameraRight(1, 0, 0);
+glm::vec3 cameraUp(0, 1, 0);
 
 void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<float> &sphereVertices, std::vector<int> &sphereIndices)
 {
@@ -271,49 +280,48 @@ void Draw(Shader shaderProgram)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glm::mat4 view(1.0f);
     glm::mat4 one(1.0f);
-    view = glm::translate(view, viewPos);
-    view = glm::rotate(view, glm::radians(vYRot), glm::vec3(0.0, 1.0, 0.0));
-    view = glm::rotate(view, glm::radians(vXRot), glm::vec3(1.0, 0.0, 0.0));
+    view = glm::lookAt(viewPos, viewPos + cameraFront, cameraUp);
     glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f);
 
     shaderProgram.setMatrix4fv("view", glm::value_ptr(view));
     shaderProgram.setMatrix4fv("projection", glm::value_ptr(projection));
 
     shaderProgram.setInt("ourTexture", 0);
-    
-    shaderProgram.setVec3("viewPos",-viewPos);
+
+    shaderProgram.setVec3("viewPos", viewPos);
 
     // 太阳光源
-    shaderProgram.setVec3("lightPos",sunLight.pos);
-    shaderProgram.setVec3("lightColor",sunLight.color);
+    shaderProgram.setVec3("lightPos", sunLight.pos);
+    shaderProgram.setVec3("lightColor", sunLight.color);
 
-    //材质
-    // shaderProgram.setVec3("ka",ballMa.ka);
-    // shaderProgram.setVec3("kd",ballMa.kd);
-    // shaderProgram.setVec3("kr",ballMa.kr);
-    // shaderProgram.setFloat("n",ballMa.n);
-    // shaderProgram.setVec3("lightColor",sunLight.color);
-
+    // 材质
+    //  shaderProgram.setVec3("ka",ballMa.ka);
+    //  shaderProgram.setVec3("kd",ballMa.kd);
+    //  shaderProgram.setVec3("kr",ballMa.kr);
+    //  shaderProgram.setFloat("n",ballMa.n);
+    //  shaderProgram.setVec3("lightColor",sunLight.color);
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, sunTex);
 
-    shaderProgram.setInt("background",0);
-    shaderProgram.setBool("sun",true);
+    shaderProgram.setInt("background", 0);
+    shaderProgram.setBool("sun", true);
 
     // 绘制sun
     shaderProgram.setMatrix4fv("model", glm::value_ptr(one));
     glBindVertexArray(vertex_array_object); // 绑定VAO
     glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
-    
-    shaderProgram.setBool("sun",false);
+
+    shaderProgram.setBool("sun", false);
 
     // 绘制earth
     xRot += (float)0.05f;
+    selfRot += (float)0.3f;
     glm::mat4 earthTrans(1.0f);
     earthTrans = glm::rotate(earthTrans, glm::radians(xRot), glm::vec3(0.0, 1.0, 0.0));
     earthTrans = glm::translate(earthTrans, glm::vec3(3.0f, 0.0f, 0.0f));
     earthTrans = glm::scale(earthTrans, glm::vec3(0.3f, 0.3f, 0.3f));
+    earthTrans = glm::rotate(earthTrans, glm::radians(selfRot), glm::vec3(0.0, 1.0, 0.0));
     glm::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
     glm::vec4 earthPos = earthTrans * oriPos;
 
@@ -341,8 +349,8 @@ void Draw(Shader shaderProgram)
     // back
 
     glBindVertexArray(back_vao); // 绑定VAO
-    
-    shaderProgram.setInt("background",1);
+
+    shaderProgram.setInt("background", 1);
 
     shaderProgram.setMatrix4fv("model", glm::value_ptr(one));
     shaderProgram.setMatrix4fv("view", glm::value_ptr(one));
@@ -367,11 +375,75 @@ void reshaper(GLFWwindow *window, int width, int height)
     }
 }
 
+void mouse_callback(GLFWwindow *window, double xpos, double ypos)
+{
+    if (firstMouse)
+    {
+        glfwSetCursorPos(window, 400, 300);
+        xpos = 400;
+        ypos = 300;
+        lastX = 400;
+        lastY = 300;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;
+
+    float sensitivity = 0.01;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaw += xoffset;
+    pitch += yoffset;
+
+    if (pitch > 89.0f)
+        pitch = 89.0f;
+    if (pitch < -89.0f)
+        pitch = -89.0f;
+
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+    front.y = sin(glm::radians(pitch));
+    front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+    cameraFront = glm::normalize(front);
+    cameraRight = glm::normalize(glm::cross(cameraFront, glm::vec3(0, 1, 0))); // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
+    cameraUp = glm::normalize(glm::cross(cameraRight, cameraFront));
+
+    glfwSetCursorPos(window, 400, 300);
+}
+
+void processInput(GLFWwindow *window)
+{
+    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        viewPos += speed * cameraFront * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        viewPos -= speed * cameraFront * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        viewPos -= speed * cameraRight * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        viewPos += speed * cameraRight * deltaTime;
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
+    {
+        yaw = 90;
+        pitch = 0;
+        viewPos = glm::vec3(0.0f, 0.0f, -5.0f);
+        cameraFront = glm::vec3(0, 0, 1.0);
+        cameraRight= glm::vec3(1, 0, 0);
+        cameraUp= glm::vec3(0, 1, 0);
+    }
+}
+
 void run(GLFWwindow *window, float fps)
 {
     Shader shaderProgram = initial(); // 初始化
     float interval = 1000 / fps;
     auto startTime = std::chrono::high_resolution_clock::now();
+    float lastFrame = static_cast<float>(glfwGetTime());
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, mouse_callback);
     // 窗口大小改变时调用reshaper函数
     glfwSetFramebufferSizeCallback(window, reshaper);
     while (!glfwWindowShouldClose(window))
@@ -380,6 +452,10 @@ void run(GLFWwindow *window, float fps)
         auto accTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
         if (accTime.count() < interval)
             continue;
+        processInput(window);
+        float currentFrame = static_cast<float>(glfwGetTime());
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
         Draw(shaderProgram);
         glfwSwapBuffers(window);
         glfwPollEvents();
