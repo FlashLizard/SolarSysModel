@@ -5,7 +5,9 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
-#include <vmath.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 
 class Image {
@@ -45,7 +47,7 @@ Image *earthImg;
 Image *moonImg;
 Image *sunImg;
 
-void genSphere(float radio, int xSegment, int ySegment, bool uv, std::vector<float> &sphereVertices, std::vector<int> &sphereIndices)
+void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<float> &sphereVertices, std::vector<int> &sphereIndices)
 {
     // 进行球体顶点和三角面片的计算
     //  生成球的顶点
@@ -57,9 +59,9 @@ void genSphere(float radio, int xSegment, int ySegment, bool uv, std::vector<flo
             float yi = (float)y / (float)ySegment;
             float theta = yi * PI;
             float phi = xi * 2 * PI;
-            float xPos = radio * std::sin(theta) * std::cos(phi);
-            float yPos = radio * std::cos(theta);
-            float zPos = radio * std::sin(theta) * std::sin(phi);
+            float xPos = radius * std::sin(theta) * std::cos(phi);
+            float yPos = radius * std::cos(theta);
+            float zPos = radius * std::sin(theta) * std::sin(phi);
 
             sphereVertices.push_back(xPos);
             sphereVertices.push_back(yPos);
@@ -95,7 +97,7 @@ Shader initial(void)
 {
     std::vector<float> sphereVertices;
     std::vector<int> sphereIndices;
-    genSphere(1.0, X_SEGMENTS, Y_SEGMENTS, true, sphereVertices, sphereIndices);
+    genSphere(1.0, X_SEGMENTS, Y_SEGMENTS, false, sphereVertices, sphereIndices);
     // 球
     glGenVertexArrays(1, &vertex_array_object);
     glGenBuffers(1, &vertex_buffer_object);
@@ -143,13 +145,14 @@ void Draw(Shader shaderProgram)
     // 清空颜色缓冲和深度缓冲区
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    vmath::mat4 vTrans = vmath::rotate(vXRot, vmath::vec3(1.0, 0.0, 0.0)) *
-                         vmath::rotate(vYRot, vmath::vec3(0.0, 1.0, 0.0)) * vmath::translate(0.0f, 0.0f, -5.0f);
+    glm::mat4 vTrans(1.0f);
+    vTrans = glm::translate(vTrans, glm::vec3(0.0f, 0.0f, -5.0f));
+    vTrans = glm::rotate(vTrans, vYRot, glm::vec3(0.0, 1.0, 0.0));
+    vTrans = glm::rotate(vTrans, vXRot, glm::vec3(1.0, 0.0, 0.0));
     // 处理图形的旋转
-    vmath::mat4 trans = vmath::perspective(60, aspact, 1.0f, 500.0f) * vTrans;
+    glm::mat4 trans = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans;
     unsigned int transformLoc = glGetUniformLocation(shaderProgram.ID, "transform");
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, trans);
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
 
     // 处理图形的颜色
     GLfloat vColor[4] = {1.0f, 0.0f, 0.0f, 1.0f};
@@ -162,11 +165,12 @@ void Draw(Shader shaderProgram)
 
     // 绘制第二个黑色的球
     xRot += (float)0.05f;
-    vmath::mat4 earthTrans = vmath::rotate(xRot, vmath::vec3(0.0, 1.0, 0.0)) *
-                             vmath::translate(3.0f, 0.0f, 0.0f) * vmath::scale(0.3f);
-    // vmath::vec4 earthPos = vmath::vec4(0.0f, 0.0f, 0.0f, 1.0f)* earthTrans;
-    vmath::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
-    vmath::vec4 earthPos(0.0f, 0.0f, 0.0f, 0.0f);
+    glm::mat4 earthTrans(1.0f);
+    earthTrans = glm::rotate(earthTrans, glm::radians(xRot), glm::vec3(0.0, 1.0, 0.0));
+    earthTrans = glm::translate(earthTrans, glm::vec3(3.0f, 0.0f, 0.0f));
+    earthTrans =  glm::scale(earthTrans, glm::vec3(0.3f,0.3f,0.3f));
+    glm::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
+    glm::vec4 earthPos(0.0f, 0.0f, 0.0f, 0.0f);
     for (int i = 0; i < 4; i++)
     {
         for (int j = 0; j < 4; j++)
@@ -174,22 +178,23 @@ void Draw(Shader shaderProgram)
             earthPos[j] += earthTrans[i][j] * oriPos[i];
         }
     }
-    vmath::mat4 trans2 = vmath::perspective(60, aspact, 1.0f, 500.0f) * vTrans * earthTrans;
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, trans2);
+    glm::mat4 trans2 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthTrans;
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans2));
     GLfloat vColor2[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     glUniform4fv(colorLoc, 1, vColor2);
     glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
 
     // 绘制第三个蓝色的球
     xRot3 += (float)0.35f;
-    vmath::mat4 eclipticRot = vmath::rotate(23.5f, vmath::vec3(0.0, 0.0, 1.0));
-    vmath::mat4 negEclipticRot = vmath::rotate(-23.5f, vmath::vec3(0.0, 0.0, 1.0));
-    vmath::vec4 earthAix4 = vmath::vec4(0.0, 1.0, 0.0, 0.0) * eclipticRot;
-    vmath::vec3 earthAix3 = vmath::vec3(earthAix4[0], earthAix4[1], earthAix4[2]);
-    vmath::mat4 earthPosTrans = vmath::translate(earthPos[0], earthPos[1], earthPos[2]);
+    glm::mat4 eclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 negEclipticRot = glm::rotate(glm::mat4(1.0f),glm::radians(-23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::vec4 earthAix4 = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f) * eclipticRot;
+    glm::vec3 earthAix3 = glm::vec3(earthAix4[0], earthAix4[1], earthAix4[2]);
+    glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos[0], earthPos[1], earthPos[2]));
 
-    vmath::mat4 trans3 = vmath::perspective(60, aspact, 1.0f, 500.0f) * vTrans * earthPosTrans * vmath::rotate(xRot3, earthAix3) * negEclipticRot * vmath::translate(0.5f, 0.0f, 0.0f) * vmath::scale(0.1f);
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, trans3);
+    glm::mat4 trans3 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthPosTrans 
+    * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f,0.1f,0.1f));
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans3));
     GLfloat vColor3[4] = {0.0f, 0.0f, 1.0f, 1.0f};
     glUniform4fv(colorLoc, 1, vColor3);
     glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
