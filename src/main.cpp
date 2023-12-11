@@ -8,14 +8,30 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <cmath>
 
-
-class Image {
+class Image
+{
 public:
     unsigned char *data;
     int width, height, nrChannels;
-    Image(std::string path) {
+    Image(std::string path)
+    {
         data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
+    }
+    void Print() {
+        printf("Tex %d,%d,%d\ndata:",width,height,nrChannels);
+        for(int i=0;i<std::min(width*height,50);i++) {
+            printf("%d,",data[i]);
+        }
+        if(width*height>=50) {
+            printf("...\n");
+        } else {
+            printf("\n");
+        }
+    }
+    ~Image() {
+        stbi_image_free(data);
     }
 };
 
@@ -36,27 +52,41 @@ static GLfloat vYRot = 0.0f;
 GLuint vertex_array_object;   // == VAO句柄
 GLuint vertex_buffer_object;  // == VBO句柄
 GLuint element_buffer_object; //==EBO句柄
+int ball_size;
+
+// background
+GLuint back_vao;
+GLuint back_vbo;
+GLuint back_ebo;
+int back_size;
 
 // 球的数据参数
-const int X_SEGMENTS = 20;
-const int Y_SEGMENTS = 20;
+const int X_SEGMENTS = 50;
+const int Y_SEGMENTS = 50;
 const GLfloat PI = 3.14159265358979323846f;
 
 // 贴图
 Image *earthImg;
 Image *moonImg;
 Image *sunImg;
+Image *backImg;
+
+unsigned int earthTex;
+unsigned int sunTex;
+unsigned int moonTex;
+unsigned int backTex;
 
 void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<float> &sphereVertices, std::vector<int> &sphereIndices)
 {
     // 进行球体顶点和三角面片的计算
     //  生成球的顶点
+
     for (int y = 0; y < ySegment; y++)
     {
         for (int x = 0; x < xSegment; x++)
         {
-            float xi = (float)x / (float)xSegment;
-            float yi = (float)y / (float)ySegment;
+            float xi = (float)x / (float)(xSegment-1);
+            float yi = (float)y / (float)(ySegment-1);
             float theta = yi * PI;
             float phi = xi * 2 * PI;
             float xPos = radius * std::sin(theta) * std::cos(phi);
@@ -68,8 +98,8 @@ void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<fl
             sphereVertices.push_back(zPos);
             if (uv)
             {
-                float u = phi / (2 * PI);
-                float v = theta / PI;
+                float u = xi;
+                float v = 1.0 - yi;
                 sphereVertices.push_back(u);
                 sphereVertices.push_back(v);
             }
@@ -93,12 +123,44 @@ void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<fl
     }
 }
 
+void genTex(unsigned int *id, Image *img) {
+
+    glGenTextures(1, id);
+    glBindTexture(GL_TEXTURE_2D, *id);
+    // 为当前绑定的纹理对象设置环绕、过滤方式
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img->width, img->height, 0, GL_RGB, GL_UNSIGNED_BYTE,
+                 img->data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+}
+
 Shader initial(void)
 {
+    
+    stbi_set_flip_vertically_on_load(true);
+    // tell stb_image.h to flip loaded texture's on the y-axis.
+    // 图片
+    earthImg = new Image("res/earth.jpg");
+    sunImg = new Image("res/sun.jpg");
+    moonImg = new Image("res/moon.jpg");
+    backImg = new Image("res/background.jpg");
+    backImg->Print();
+    
+    // 图片
+    genTex(&earthTex,earthImg);
+    genTex(&sunTex,sunImg);
+    genTex(&moonTex,moonImg);
+    genTex(&backTex,backImg);
+
+    
+    // 球
     std::vector<float> sphereVertices;
     std::vector<int> sphereIndices;
-    genSphere(1.0, X_SEGMENTS, Y_SEGMENTS, false, sphereVertices, sphereIndices);
-    // 球
+    genSphere(1.0, X_SEGMENTS, Y_SEGMENTS, true, sphereVertices, sphereIndices);
+    ball_size = sphereIndices.size();
     glGenVertexArrays(1, &vertex_array_object);
     glGenBuffers(1, &vertex_buffer_object);
     // 生成并绑定球体的VAO和VBO
@@ -110,8 +172,45 @@ Shader initial(void)
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_buffer_object);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);
     // 设置顶点属性指针
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
     glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    // 解绑VAO和VBO
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    // 背景
+    float bWidth,bHeight,bDeep;
+    bWidth = 1;
+    bHeight = 1;
+    bDeep = 0.99;
+    std::vector<float> backVertices = {
+        -1, 1, bDeep, 0,1,
+        1, 1, bDeep, 1,1,
+        -1, -1, bDeep, 0,0,
+        1, -1, bDeep, 1,0
+    };
+    std::vector<int> backIndices = {
+        0, 2, 1,
+        3, 1, 2
+    };
+    back_size = backIndices.size();
+    glGenVertexArrays(1, &back_vao);
+    glGenBuffers(1, &back_vbo);
+
+    glBindVertexArray(back_vao);
+    glBindBuffer(GL_ARRAY_BUFFER, back_vbo);
+    // 将顶点数据绑定至当前默认的缓冲中
+    glBufferData(GL_ARRAY_BUFFER, backVertices.size() * sizeof(float), &backVertices[0], GL_STATIC_DRAW);
+    glGenBuffers(1, &back_ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, back_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, backIndices.size() * sizeof(int), &backIndices[0], GL_STATIC_DRAW);
+    // 设置顶点属性指针
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
     // 解绑VAO和VBO
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
@@ -132,11 +231,6 @@ Shader initial(void)
     // 开启深度测试
     glEnable(GL_DEPTH_TEST);
 
-    // 图片
-    earthImg = new Image("res/earth.jpg");
-    sunImg = new Image("res/sun.jpg");
-    moonImg = new Image("res/moon.jpg");
-
     return shaderProgram;
 }
 
@@ -149,9 +243,12 @@ void Draw(Shader shaderProgram)
     vTrans = glm::translate(vTrans, glm::vec3(0.0f, 0.0f, -5.0f));
     vTrans = glm::rotate(vTrans, vYRot, glm::vec3(0.0, 1.0, 0.0));
     vTrans = glm::rotate(vTrans, vXRot, glm::vec3(1.0, 0.0, 0.0));
+
+
     // 处理图形的旋转
     glm::mat4 trans = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans;
     unsigned int transformLoc = glGetUniformLocation(shaderProgram.ID, "transform");
+    shaderProgram.setInt("ourTexture",0);
     glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
 
     // 处理图形的颜色
@@ -159,46 +256,61 @@ void Draw(Shader shaderProgram)
     unsigned int colorLoc = glGetUniformLocation(shaderProgram.ID, "color");
     glUniform4fv(colorLoc, 1, vColor);
 
+    // 贴图
+    glBindTexture(GL_TEXTURE_2D, sunTex);
+
     // 绘制第一个红色的球
     glBindVertexArray(vertex_array_object); // 绑定VAO
-    glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
 
     // 绘制第二个黑色的球
     xRot += (float)0.05f;
     glm::mat4 earthTrans(1.0f);
     earthTrans = glm::rotate(earthTrans, glm::radians(xRot), glm::vec3(0.0, 1.0, 0.0));
     earthTrans = glm::translate(earthTrans, glm::vec3(3.0f, 0.0f, 0.0f));
-    earthTrans =  glm::scale(earthTrans, glm::vec3(0.3f,0.3f,0.3f));
+    earthTrans = glm::scale(earthTrans, glm::vec3(0.3f, 0.3f, 0.3f));
     glm::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
-    glm::vec4 earthPos(0.0f, 0.0f, 0.0f, 0.0f);
-    for (int i = 0; i < 4; i++)
-    {
-        for (int j = 0; j < 4; j++)
-        {
-            earthPos[j] += earthTrans[i][j] * oriPos[i];
-        }
-    }
+    glm::vec4 earthPos = earthTrans * oriPos;
     glm::mat4 trans2 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthTrans;
     glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans2));
     GLfloat vColor2[4] = {0.0f, 0.0f, 0.0f, 1.0f};
     glUniform4fv(colorLoc, 1, vColor2);
-    glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+    
+    // 贴图
+    glBindTexture(GL_TEXTURE_2D, earthTex);
+
+    glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
+
+
 
     // 绘制第三个蓝色的球
     xRot3 += (float)0.35f;
     glm::mat4 eclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::mat4 negEclipticRot = glm::rotate(glm::mat4(1.0f),glm::radians(-23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::mat4 negEclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(-23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::vec4 earthAix4 = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f) * eclipticRot;
-    glm::vec3 earthAix3 = glm::vec3(earthAix4[0], earthAix4[1], earthAix4[2]);
-    glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos[0], earthPos[1], earthPos[2]));
+    glm::vec3 earthAix3 = glm::vec3(earthAix4);
+    glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos));
 
-    glm::mat4 trans3 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthPosTrans 
-    * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f,0.1f,0.1f));
+    glm::mat4 trans3 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
     glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans3));
     GLfloat vColor3[4] = {0.0f, 0.0f, 1.0f, 1.0f};
     glUniform4fv(colorLoc, 1, vColor3);
-    glDrawElements(GL_TRIANGLES, X_SEGMENTS * Y_SEGMENTS * 6, GL_UNSIGNED_INT, 0);
+    
+    // 贴图
+    glBindTexture(GL_TEXTURE_2D, moonTex);
+    glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
+    
+    // back
 
+    glBindVertexArray(back_vao); // 绑定VAO
+    glUniform4fv(colorLoc, 1, vColor);
+
+    glm::mat4 trans4 = glm::mat4(1.0f);
+    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans4));
+
+    // 贴图
+    glBindTexture(GL_TEXTURE_2D, backTex);
+    glDrawElements(GL_TRIANGLES, back_size, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
 
@@ -266,5 +378,9 @@ int main()
     run(window, 30);
     glfwDestroyWindow(window);
     glfwTerminate();
+    delete earthImg;
+    delete sunImg;
+    delete moonImg;
+    delete backImg;
     return 0;
 }
