@@ -147,7 +147,7 @@ Shader initial(void)
     sunImg = new Image("res/sun.jpg");
     moonImg = new Image("res/moon.jpg");
     backImg = new Image("res/background.jpg");
-    backImg->Print();
+    //backImg->Print();
     
     // 图片
     genTex(&earthTex,earthImg);
@@ -239,27 +239,23 @@ void Draw(Shader shaderProgram)
     // 清空颜色缓冲和深度缓冲区
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glm::mat4 vTrans(1.0f);
-    vTrans = glm::translate(vTrans, glm::vec3(0.0f, 0.0f, -5.0f));
-    vTrans = glm::rotate(vTrans, vYRot, glm::vec3(0.0, 1.0, 0.0));
-    vTrans = glm::rotate(vTrans, vXRot, glm::vec3(1.0, 0.0, 0.0));
+    glm::mat4 view(1.0f);
+    glm::mat4 one(1.0f);
+    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -5.0f));
+    view = glm::rotate(view, glm::radians(vYRot), glm::vec3(0.0, 1.0, 0.0));
+    view = glm::rotate(view, glm::radians(vXRot), glm::vec3(1.0, 0.0, 0.0));
+    glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f);
 
+    shaderProgram.setMatrix4fv("view",glm::value_ptr(view));
+    shaderProgram.setMatrix4fv("projection",glm::value_ptr(projection));
 
-    // 处理图形的旋转
-    glm::mat4 trans = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans;
-    unsigned int transformLoc = glGetUniformLocation(shaderProgram.ID, "transform");
     shaderProgram.setInt("ourTexture",0);
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
-
-    // 处理图形的颜色
-    GLfloat vColor[4] = {1.0f, 0.0f, 0.0f, 1.0f};
-    unsigned int colorLoc = glGetUniformLocation(shaderProgram.ID, "color");
-    glUniform4fv(colorLoc, 1, vColor);
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, sunTex);
 
     // 绘制第一个红色的球
+    shaderProgram.setMatrix4fv("model",glm::value_ptr(one));
     glBindVertexArray(vertex_array_object); // 绑定VAO
     glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
 
@@ -271,14 +267,11 @@ void Draw(Shader shaderProgram)
     earthTrans = glm::scale(earthTrans, glm::vec3(0.3f, 0.3f, 0.3f));
     glm::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
     glm::vec4 earthPos = earthTrans * oriPos;
-    glm::mat4 trans2 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthTrans;
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans2));
-    GLfloat vColor2[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-    glUniform4fv(colorLoc, 1, vColor2);
+    
+    shaderProgram.setMatrix4fv("model",glm::value_ptr(earthTrans));
     
     // 贴图
     glBindTexture(GL_TEXTURE_2D, earthTex);
-
     glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
 
 
@@ -290,11 +283,9 @@ void Draw(Shader shaderProgram)
     glm::vec4 earthAix4 = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f) * eclipticRot;
     glm::vec3 earthAix3 = glm::vec3(earthAix4);
     glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos));
+    glm::mat4 moonTrans = earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
 
-    glm::mat4 trans3 = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f) * vTrans * earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans3));
-    GLfloat vColor3[4] = {0.0f, 0.0f, 1.0f, 1.0f};
-    glUniform4fv(colorLoc, 1, vColor3);
+    shaderProgram.setMatrix4fv("model",glm::value_ptr(moonTrans));
     
     // 贴图
     glBindTexture(GL_TEXTURE_2D, moonTex);
@@ -303,10 +294,10 @@ void Draw(Shader shaderProgram)
     // back
 
     glBindVertexArray(back_vao); // 绑定VAO
-    glUniform4fv(colorLoc, 1, vColor);
 
-    glm::mat4 trans4 = glm::mat4(1.0f);
-    glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans4));
+    shaderProgram.setMatrix4fv("model",glm::value_ptr(one));
+    shaderProgram.setMatrix4fv("view",glm::value_ptr(one));
+    shaderProgram.setMatrix4fv("projection",glm::value_ptr(one));
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, backTex);
