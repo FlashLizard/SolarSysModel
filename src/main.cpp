@@ -10,6 +10,30 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <cmath>
 
+struct Material
+{
+    glm::vec3 ka; // Ambient coefficient.
+    glm::vec3 kd; // Diffuse coefficient.
+    glm::vec3 kr; // Reflected specular coefficient.
+    float n;       // The specular reflection exponent. Ranges from 0.0 to 128.0.
+};
+
+Material ballMa = {glm::vec3(0.1, 0.1, 0.1),
+                 glm::vec3(0.3, 0.3, 0.3),
+                 glm::vec3(1, 1, 1),
+                 10};
+
+struct DotLight
+{
+    glm::vec3 pos;
+    glm::vec3 color;
+};
+
+DotLight sunLight = {
+    glm::vec3(0,0,0),
+    glm::vec3(1,1,1)
+};
+
 class Image
 {
 public:
@@ -19,18 +43,24 @@ public:
     {
         data = stbi_load(path.c_str(), &width, &height, &nrChannels, 0);
     }
-    void Print() {
-        printf("Tex %d,%d,%d\ndata:",width,height,nrChannels);
-        for(int i=0;i<std::min(width*height,50);i++) {
-            printf("%d,",data[i]);
+    void Print()
+    {
+        printf("Tex %d,%d,%d\ndata:", width, height, nrChannels);
+        for (int i = 0; i < std::min(width * height, 50); i++)
+        {
+            printf("%d,", data[i]);
         }
-        if(width*height>=50) {
+        if (width * height >= 50)
+        {
             printf("...\n");
-        } else {
+        }
+        else
+        {
             printf("\n");
         }
     }
-    ~Image() {
+    ~Image()
+    {
         stbi_image_free(data);
     }
 };
@@ -65,6 +95,8 @@ const int X_SEGMENTS = 50;
 const int Y_SEGMENTS = 50;
 const GLfloat PI = 3.14159265358979323846f;
 
+glm::vec3 viewPos(0.0f, 0.0f, -5.0f);
+
 // 贴图
 Image *earthImg;
 Image *moonImg;
@@ -85,8 +117,8 @@ void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<fl
     {
         for (int x = 0; x < xSegment; x++)
         {
-            float xi = (float)x / (float)(xSegment-1);
-            float yi = (float)y / (float)(ySegment-1);
+            float xi = (float)x / (float)(xSegment - 1);
+            float yi = (float)y / (float)(ySegment - 1);
             float theta = yi * PI;
             float phi = xi * 2 * PI;
             float xPos = radius * std::sin(theta) * std::cos(phi);
@@ -123,7 +155,8 @@ void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<fl
     }
 }
 
-void genTex(unsigned int *id, Image *img) {
+void genTex(unsigned int *id, Image *img)
+{
 
     glGenTextures(1, id);
     glBindTexture(GL_TEXTURE_2D, *id);
@@ -139,7 +172,7 @@ void genTex(unsigned int *id, Image *img) {
 
 Shader initial(void)
 {
-    
+
     stbi_set_flip_vertically_on_load(true);
     // tell stb_image.h to flip loaded texture's on the y-axis.
     // 图片
@@ -147,15 +180,14 @@ Shader initial(void)
     sunImg = new Image("res/sun.jpg");
     moonImg = new Image("res/moon.jpg");
     backImg = new Image("res/background.jpg");
-    //backImg->Print();
-    
-    // 图片
-    genTex(&earthTex,earthImg);
-    genTex(&sunTex,sunImg);
-    genTex(&moonTex,moonImg);
-    genTex(&backTex,backImg);
+    // backImg->Print();
 
-    
+    // 图片
+    genTex(&earthTex, earthImg);
+    genTex(&sunTex, sunImg);
+    genTex(&moonTex, moonImg);
+    genTex(&backTex, backImg);
+
     // 球
     std::vector<float> sphereVertices;
     std::vector<int> sphereIndices;
@@ -181,20 +213,18 @@ Shader initial(void)
     glBindVertexArray(0);
 
     // 背景
-    float bWidth,bHeight,bDeep;
+    float bWidth, bHeight, bDeep;
     bWidth = 1;
     bHeight = 1;
     bDeep = 0.99;
     std::vector<float> backVertices = {
-        -1, 1, bDeep, 0,1,
-        1, 1, bDeep, 1,1,
-        -1, -1, bDeep, 0,0,
-        1, -1, bDeep, 1,0
-    };
+        -1, 1, bDeep, 0, 1,
+        1, 1, bDeep, 1, 1,
+        -1, -1, bDeep, 0, 0,
+        1, -1, bDeep, 1, 0};
     std::vector<int> backIndices = {
         0, 2, 1,
-        3, 1, 2
-    };
+        3, 1, 2};
     back_size = backIndices.size();
     glGenVertexArrays(1, &back_vao);
     glGenBuffers(1, &back_vbo);
@@ -241,25 +271,44 @@ void Draw(Shader shaderProgram)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glm::mat4 view(1.0f);
     glm::mat4 one(1.0f);
-    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -5.0f));
+    view = glm::translate(view, viewPos);
     view = glm::rotate(view, glm::radians(vYRot), glm::vec3(0.0, 1.0, 0.0));
     view = glm::rotate(view, glm::radians(vXRot), glm::vec3(1.0, 0.0, 0.0));
     glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f);
 
-    shaderProgram.setMatrix4fv("view",glm::value_ptr(view));
-    shaderProgram.setMatrix4fv("projection",glm::value_ptr(projection));
+    shaderProgram.setMatrix4fv("view", glm::value_ptr(view));
+    shaderProgram.setMatrix4fv("projection", glm::value_ptr(projection));
 
-    shaderProgram.setInt("ourTexture",0);
+    shaderProgram.setInt("ourTexture", 0);
+    
+    shaderProgram.setVec3("viewPos",-viewPos);
+
+    // 太阳光源
+    shaderProgram.setVec3("lightPos",sunLight.pos);
+    shaderProgram.setVec3("lightColor",sunLight.color);
+
+    //材质
+    // shaderProgram.setVec3("ka",ballMa.ka);
+    // shaderProgram.setVec3("kd",ballMa.kd);
+    // shaderProgram.setVec3("kr",ballMa.kr);
+    // shaderProgram.setFloat("n",ballMa.n);
+    // shaderProgram.setVec3("lightColor",sunLight.color);
+
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, sunTex);
 
-    // 绘制第一个红色的球
-    shaderProgram.setMatrix4fv("model",glm::value_ptr(one));
+    shaderProgram.setInt("background",0);
+    shaderProgram.setBool("sun",true);
+
+    // 绘制sun
+    shaderProgram.setMatrix4fv("model", glm::value_ptr(one));
     glBindVertexArray(vertex_array_object); // 绑定VAO
     glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
+    
+    shaderProgram.setBool("sun",false);
 
-    // 绘制第二个黑色的球
+    // 绘制earth
     xRot += (float)0.05f;
     glm::mat4 earthTrans(1.0f);
     earthTrans = glm::rotate(earthTrans, glm::radians(xRot), glm::vec3(0.0, 1.0, 0.0));
@@ -267,16 +316,14 @@ void Draw(Shader shaderProgram)
     earthTrans = glm::scale(earthTrans, glm::vec3(0.3f, 0.3f, 0.3f));
     glm::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
     glm::vec4 earthPos = earthTrans * oriPos;
-    
-    shaderProgram.setMatrix4fv("model",glm::value_ptr(earthTrans));
-    
+
+    shaderProgram.setMatrix4fv("model", glm::value_ptr(earthTrans));
+
     // 贴图
     glBindTexture(GL_TEXTURE_2D, earthTex);
     glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
 
-
-
-    // 绘制第三个蓝色的球
+    // 绘制moon
     xRot3 += (float)0.35f;
     glm::mat4 eclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 negEclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(-23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -285,19 +332,21 @@ void Draw(Shader shaderProgram)
     glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos));
     glm::mat4 moonTrans = earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
 
-    shaderProgram.setMatrix4fv("model",glm::value_ptr(moonTrans));
-    
+    shaderProgram.setMatrix4fv("model", glm::value_ptr(moonTrans));
+
     // 贴图
     glBindTexture(GL_TEXTURE_2D, moonTex);
     glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
-    
+
     // back
 
     glBindVertexArray(back_vao); // 绑定VAO
+    
+    shaderProgram.setInt("background",1);
 
-    shaderProgram.setMatrix4fv("model",glm::value_ptr(one));
-    shaderProgram.setMatrix4fv("view",glm::value_ptr(one));
-    shaderProgram.setMatrix4fv("projection",glm::value_ptr(one));
+    shaderProgram.setMatrix4fv("model", glm::value_ptr(one));
+    shaderProgram.setMatrix4fv("view", glm::value_ptr(one));
+    shaderProgram.setMatrix4fv("projection", glm::value_ptr(one));
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, backTex);
