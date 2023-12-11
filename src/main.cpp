@@ -56,7 +56,7 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 int fullWidth;
 int fullHeight;
-bool fullWin = false;
+int fullWin = 0;
 float aspect = (float)4.0 / (float)3.0;
 
 // 旋转参数
@@ -103,7 +103,7 @@ glm::vec3 cameraFront(0, 0, 1.0);
 glm::vec3 cameraRight(-1, 0, 0);
 glm::vec3 cameraUp(0, 1, 0);
 
-bool pause = false;
+int pause = 0;
 
 void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<float> &sphereVertices, std::vector<int> &sphereIndices)
 {
@@ -264,7 +264,7 @@ Shader initial(void)
 void Draw(Shader shaderProgram)
 {
     // 改变球体角度
-    if (!pause)
+    if (!(pause & 2))
     {
         earthRot += (float)0.004f;
         selfRot += (float)0.3f;
@@ -304,13 +304,16 @@ void Draw(Shader shaderProgram)
     shaderProgram.setBool("sun", false);
 
     // 绘制earth
-    glm::mat4 earthTrans(1.0f);
-    earthTrans = glm::rotate(earthTrans, glm::radians(earthRot), glm::vec3(0.0, 1.0, 0.0));
-    earthTrans = glm::translate(earthTrans, glm::vec3(3.0f, 0.0f, 0.0f));
-    earthTrans = glm::scale(earthTrans, glm::vec3(0.3f, 0.3f, 0.3f));
-    earthTrans = glm::rotate(earthTrans, glm::radians(selfRot), glm::vec3(0.0, 1.0, 0.0));
+    glm::mat4 earthTrans;
+    earthTrans = glm::rotate(one, glm::radians(earthRot), glm::vec3(0.0, 1.0, 0.0)) * glm::translate(one, glm::vec3(3.0f, 0.0f, 0.0f));
     glm::vec4 oriPos(0.0f, 0.0f, 0.0f, 1.0f);
     glm::vec4 earthPos = earthTrans * oriPos;
+    glm::mat4 eclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
+    glm::vec4 earthAix4 = eclipticRot * glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
+    glm::vec3 earthAix3 = glm::vec3(earthAix4);
+    glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos));
+    earthTrans = earthPosTrans * eclipticRot * glm::scale(one, glm::vec3(0.3f, 0.3f, 0.3f)) * glm::rotate(one, glm::radians(selfRot), glm::vec3(0.0, 1.0, 0.0));
+    ;
 
     shaderProgram.setMatrix4fv("model", glm::value_ptr(earthTrans));
 
@@ -319,12 +322,7 @@ void Draw(Shader shaderProgram)
     glDrawElements(GL_TRIANGLES, ballSize, GL_UNSIGNED_INT, 0);
 
     // 绘制moon
-    glm::mat4 eclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::mat4 negEclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(-23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
-    glm::vec4 earthAix4 = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f) * eclipticRot;
-    glm::vec3 earthAix3 = glm::vec3(earthAix4);
-    glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos));
-    glm::mat4 moonTrans = earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(moonRot), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
+    glm::mat4 moonTrans = earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(moonRot), earthAix3) * eclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
 
     shaderProgram.setMatrix4fv("model", glm::value_ptr(moonTrans));
 
@@ -422,20 +420,37 @@ void processInput(GLFWwindow *window)
     }
     if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
     {
-        fullWin = !fullWin;
-        if (fullWin)
+        if (!(fullWin & 1))
         {
-
-            glfwSetWindowSize(window, fullWidth, fullHeight);
+            fullWin++;
+            if (fullWin&2)
+            {
+                glfwSetWindowSize(window, SCR_WIDTH, SCR_WIDTH);
+            }
+            else
+            {
+                glfwSetWindowSize(window, fullWidth, fullHeight);
+            }
         }
-        else
+    } else
+    {
+        if (fullWin & 1)
         {
-            glfwSetWindowSize(window, SCR_WIDTH, SCR_WIDTH);
+            fullWin++;
         }
     }
     if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
     {
-        pause = !pause;
+        if (!(pause & 1))
+        {
+            pause++;
+        }
+    } else
+    {
+        if (pause & 1)
+        {
+            pause++;
+        }
     }
 }
 
