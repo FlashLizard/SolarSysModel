@@ -10,19 +10,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <cmath>
 
-struct Material
-{
-    glm::vec3 ka; // Ambient coefficient.
-    glm::vec3 kd; // Diffuse coefficient.
-    glm::vec3 kr; // Reflected specular coefficient.
-    float n;      // The specular reflection exponent. Ranges from 0.0 to 128.0.
-};
-
-Material ballMa = {glm::vec3(0.1, 0.1, 0.1),
-                   glm::vec3(0.3, 0.3, 0.3),
-                   glm::vec3(1, 1, 1),
-                   10};
-
 struct DotLight
 {
     glm::vec3 pos;
@@ -67,28 +54,27 @@ public:
 // 窗口大小参数
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
-float aspact = (float)4.0 / (float)3.0;
+int fullWidth;
+int fullHeight;
+bool fullWin = false;
+float aspect = (float)4.0 / (float)3.0;
 
 // 旋转参数
-static GLfloat xRot = 20.0f;
-static GLfloat xRot3 = 20.0f;
-static GLfloat yRot = 20.0f;
+static GLfloat earthRot = 20.0f;
+static GLfloat moonRot = 20.0f;
 static GLfloat selfRot = 0.0f;
 
-static GLfloat vXRot = 0.0f;
-static GLfloat vYRot = 0.0f;
-
 // 句柄参数
-GLuint vertex_array_object;   // == VAO句柄
-GLuint vertex_buffer_object;  // == VBO句柄
-GLuint element_buffer_object; //==EBO句柄
-int ball_size;
+GLuint ballVAO; // == VAO句柄
+GLuint ballVBO; // == VBO句柄
+GLuint ballEBO; //==EBO句柄
+int ballSize;
 
 // background
-GLuint back_vao;
-GLuint back_vbo;
-GLuint back_ebo;
-int back_size;
+GLuint backVAO;
+GLuint backVBO;
+GLuint backEBO;
+int backSize;
 
 // 球的数据参数
 const int X_SEGMENTS = 50;
@@ -106,16 +92,18 @@ unsigned int sunTex;
 unsigned int moonTex;
 unsigned int backTex;
 
+// 相机控制相关
 bool firstMouse = true;
 float lastX, lastY;
 float deltaTime = 0;
 float speed = 0.3;
-
 float yaw = 90, pitch = 0;
 glm::vec3 viewPos(0.0f, 0.0f, -5.0f);
 glm::vec3 cameraFront(0, 0, 1.0);
-glm::vec3 cameraRight(1, 0, 0);
+glm::vec3 cameraRight(-1, 0, 0);
 glm::vec3 cameraUp(0, 1, 0);
+
+bool pause = false;
 
 void genSphere(float radius, int xSegment, int ySegment, bool uv, std::vector<float> &sphereVertices, std::vector<int> &sphereIndices)
 {
@@ -197,20 +185,20 @@ Shader initial(void)
     genTex(&moonTex, moonImg);
     genTex(&backTex, backImg);
 
-    // 球
+    // 球vao设置
     std::vector<float> sphereVertices;
     std::vector<int> sphereIndices;
     genSphere(1.0, X_SEGMENTS, Y_SEGMENTS, true, sphereVertices, sphereIndices);
-    ball_size = sphereIndices.size();
-    glGenVertexArrays(1, &vertex_array_object);
-    glGenBuffers(1, &vertex_buffer_object);
+    ballSize = sphereIndices.size();
+    glGenVertexArrays(1, &ballVAO);
+    glGenBuffers(1, &ballVBO);
     // 生成并绑定球体的VAO和VBO
-    glBindVertexArray(vertex_array_object);
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer_object);
+    glBindVertexArray(ballVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, ballVBO);
     // 将顶点数据绑定至当前默认的缓冲中
     glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(float), &sphereVertices[0], GL_STATIC_DRAW);
-    glGenBuffers(1, &element_buffer_object);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, element_buffer_object);
+    glGenBuffers(1, &ballEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ballEBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(int), &sphereIndices[0], GL_STATIC_DRAW);
     // 设置顶点属性指针
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
@@ -221,7 +209,7 @@ Shader initial(void)
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
-    // 背景
+    // 背景vao设置
     float bWidth, bHeight, bDeep;
     bWidth = 1;
     bHeight = 1;
@@ -234,16 +222,16 @@ Shader initial(void)
     std::vector<int> backIndices = {
         0, 2, 1,
         3, 1, 2};
-    back_size = backIndices.size();
-    glGenVertexArrays(1, &back_vao);
-    glGenBuffers(1, &back_vbo);
+    backSize = backIndices.size();
+    glGenVertexArrays(1, &backVAO);
+    glGenBuffers(1, &backVBO);
 
-    glBindVertexArray(back_vao);
-    glBindBuffer(GL_ARRAY_BUFFER, back_vbo);
+    glBindVertexArray(backVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, backVBO);
     // 将顶点数据绑定至当前默认的缓冲中
     glBufferData(GL_ARRAY_BUFFER, backVertices.size() * sizeof(float), &backVertices[0], GL_STATIC_DRAW);
-    glGenBuffers(1, &back_ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, back_ebo);
+    glGenBuffers(1, &backEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, backEBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, backIndices.size() * sizeof(int), &backIndices[0], GL_STATIC_DRAW);
     // 设置顶点属性指针
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
@@ -275,50 +263,49 @@ Shader initial(void)
 
 void Draw(Shader shaderProgram)
 {
+    // 改变球体角度
+    if (!pause)
+    {
+        earthRot += (float)0.004f;
+        selfRot += (float)0.3f;
+        moonRot += (float)0.1f;
+    }
+
     // 清空颜色缓冲和深度缓冲区
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glm::mat4 view(1.0f);
     glm::mat4 one(1.0f);
     view = glm::lookAt(viewPos, viewPos + cameraFront, cameraUp);
-    glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspact, 1.0f, 500.0f);
+    glm::mat4 projection = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 500.0f);
 
     shaderProgram.setMatrix4fv("view", glm::value_ptr(view));
     shaderProgram.setMatrix4fv("projection", glm::value_ptr(projection));
-
     shaderProgram.setInt("ourTexture", 0);
-
     shaderProgram.setVec3("viewPos", viewPos);
 
     // 太阳光源
     shaderProgram.setVec3("lightPos", sunLight.pos);
     shaderProgram.setVec3("lightColor", sunLight.color);
 
-    // 材质
-    //  shaderProgram.setVec3("ka",ballMa.ka);
-    //  shaderProgram.setVec3("kd",ballMa.kd);
-    //  shaderProgram.setVec3("kr",ballMa.kr);
-    //  shaderProgram.setFloat("n",ballMa.n);
-    //  shaderProgram.setVec3("lightColor",sunLight.color);
-
     // 贴图
     glBindTexture(GL_TEXTURE_2D, sunTex);
 
+    // 当前不是背景
     shaderProgram.setInt("background", 0);
+    // 当前是太阳
     shaderProgram.setBool("sun", true);
 
     // 绘制sun
     shaderProgram.setMatrix4fv("model", glm::value_ptr(one));
-    glBindVertexArray(vertex_array_object); // 绑定VAO
-    glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
+    glBindVertexArray(ballVAO); // 绑定VAO
+    glDrawElements(GL_TRIANGLES, ballSize, GL_UNSIGNED_INT, 0);
 
     shaderProgram.setBool("sun", false);
 
     // 绘制earth
-    xRot += (float)0.05f;
-    selfRot += (float)0.3f;
     glm::mat4 earthTrans(1.0f);
-    earthTrans = glm::rotate(earthTrans, glm::radians(xRot), glm::vec3(0.0, 1.0, 0.0));
+    earthTrans = glm::rotate(earthTrans, glm::radians(earthRot), glm::vec3(0.0, 1.0, 0.0));
     earthTrans = glm::translate(earthTrans, glm::vec3(3.0f, 0.0f, 0.0f));
     earthTrans = glm::scale(earthTrans, glm::vec3(0.3f, 0.3f, 0.3f));
     earthTrans = glm::rotate(earthTrans, glm::radians(selfRot), glm::vec3(0.0, 1.0, 0.0));
@@ -329,26 +316,24 @@ void Draw(Shader shaderProgram)
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, earthTex);
-    glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, ballSize, GL_UNSIGNED_INT, 0);
 
     // 绘制moon
-    xRot3 += (float)0.35f;
     glm::mat4 eclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::mat4 negEclipticRot = glm::rotate(glm::mat4(1.0f), glm::radians(-23.5f), glm::vec3(0.0f, 0.0f, 1.0f));
     glm::vec4 earthAix4 = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f) * eclipticRot;
     glm::vec3 earthAix3 = glm::vec3(earthAix4);
     glm::mat4 earthPosTrans = glm::translate(glm::mat4(1.0f), glm::vec3(earthPos));
-    glm::mat4 moonTrans = earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(xRot3), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
+    glm::mat4 moonTrans = earthPosTrans * glm::rotate(glm::mat4(1.0f), glm::radians(moonRot), earthAix3) * negEclipticRot * glm::translate(glm::mat4(1.0f), glm::vec3(0.5f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(0.1f, 0.1f, 0.1f));
 
     shaderProgram.setMatrix4fv("model", glm::value_ptr(moonTrans));
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, moonTex);
-    glDrawElements(GL_TRIANGLES, ball_size, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, ballSize, GL_UNSIGNED_INT, 0);
 
-    // back
-
-    glBindVertexArray(back_vao); // 绑定VAO
+    // 绘制背景
+    glBindVertexArray(backVAO); // 绑定VAO
 
     shaderProgram.setInt("background", 1);
 
@@ -358,7 +343,7 @@ void Draw(Shader shaderProgram)
 
     // 贴图
     glBindTexture(GL_TEXTURE_2D, backTex);
-    glDrawElements(GL_TRIANGLES, back_size, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, backSize, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 }
 
@@ -367,11 +352,11 @@ void reshaper(GLFWwindow *window, int width, int height)
     glViewport(0, 0, width, height);
     if (height == 0)
     {
-        aspact = (float)width;
+        aspect = (float)width;
     }
     else
     {
-        aspact = (float)width / (float)height;
+        aspect = (float)width / (float)height;
     }
 }
 
@@ -409,7 +394,7 @@ void mouse_callback(GLFWwindow *window, double xpos, double ypos)
     cameraFront = glm::normalize(front);
     cameraRight = glm::normalize(glm::cross(cameraFront, glm::vec3(0, 1, 0))); // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
     cameraUp = glm::normalize(glm::cross(cameraRight, cameraFront));
-
+    // 重设鼠标位置
     glfwSetCursorPos(window, 400, 300);
 }
 
@@ -425,14 +410,32 @@ void processInput(GLFWwindow *window)
         viewPos -= speed * cameraRight * deltaTime;
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         viewPos += speed * cameraRight * deltaTime;
+    // 重置镜头
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
     {
         yaw = 90;
         pitch = 0;
         viewPos = glm::vec3(0.0f, 0.0f, -5.0f);
         cameraFront = glm::vec3(0, 0, 1.0);
-        cameraRight= glm::vec3(1, 0, 0);
-        cameraUp= glm::vec3(0, 1, 0);
+        cameraRight = glm::vec3(1, 0, 0);
+        cameraUp = glm::vec3(0, 1, 0);
+    }
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+    {
+        fullWin = !fullWin;
+        if (fullWin)
+        {
+
+            glfwSetWindowSize(window, fullWidth, fullHeight);
+        }
+        else
+        {
+            glfwSetWindowSize(window, SCR_WIDTH, SCR_WIDTH);
+        }
+    }
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
+    {
+        pause = !pause;
     }
 }
 
@@ -446,12 +449,19 @@ void run(GLFWwindow *window, float fps)
     glfwSetCursorPosCallback(window, mouse_callback);
     // 窗口大小改变时调用reshaper函数
     glfwSetFramebufferSizeCallback(window, reshaper);
+
+    // 获取主监视器的分辨率
+    GLFWmonitor *primaryMonitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode *mode = glfwGetVideoMode(primaryMonitor);
+    fullHeight = mode->height;
+    fullWidth = mode->width;
+
     while (!glfwWindowShouldClose(window))
     {
         auto endTime = std::chrono::high_resolution_clock::now();
         auto accTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-        if (accTime.count() < interval)
-            continue;
+        // if (accTime.count() < interval)
+        //     continue;
         processInput(window);
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
@@ -463,8 +473,8 @@ void run(GLFWwindow *window, float fps)
     // 解绑和删除VAO和VBO
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glDeleteVertexArrays(1, &vertex_array_object);
-    glDeleteBuffers(1, &vertex_buffer_object);
+    glDeleteVertexArrays(1, &ballVAO);
+    glDeleteBuffers(1, &ballVBO);
 }
 
 int main()
@@ -477,6 +487,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     // 创建窗口(宽、高、窗口名称)
     GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Sphere", NULL, NULL);
+
     if (window == NULL)
     {
         std::cout << "Failed to Create OpenGL Context" << std::endl;
