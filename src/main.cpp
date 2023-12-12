@@ -210,10 +210,7 @@ Shader initial(void)
     glBindVertexArray(0);
 
     // 背景vao设置
-    float bWidth, bHeight, bDeep;
-    bWidth = 1;
-    bHeight = 1;
-    bDeep = 0.99;
+    float bDeep = 0.99;
     std::vector<float> backVertices = {
         -1, 1, bDeep, 0, 1,
         1, 1, bDeep, 1, 1,
