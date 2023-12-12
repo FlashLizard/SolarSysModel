@@ -1,6 +1,7 @@
 # Xmake cache
 .xmake/
 build/
+report/2023计算机图形学报告.*
 
 # MacOS Cache
 .DS_Store

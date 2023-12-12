@@ -1,5 +1,9 @@
 # SolarSysModel (日地月运动模型)
 
+## 运行程序
+
+直接运行项目根目录下的SolarSysModel.exe即可。
+
 ## 实现功能
 
 - 日地月运动轨迹
